@@ -2,7 +2,7 @@
 
 NASA Astronomy Picture of the Day in Ferrite dither.
 
-A working development scaffold, not a published release.
+An early development release. [Windows downloads](https://github.com/rwetz/ferrite-apogee/releases/latest) are also installable through Lodestone.
 
 ## Run
 
