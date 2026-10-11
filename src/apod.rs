@@ -1,4 +1,4 @@
-//! NASA APOD metadata. Keys stay in the environment and out of diagnostics.
+//! NASA's public APOD metadata and bounded image previews.
 use serde_json::Value;
 
 #[derive(Clone, Debug)]
@@ -14,8 +14,17 @@ pub struct Entry {
 
 pub fn parse(json: &str) -> Result<Entry, String> {
     let data: Value = serde_json::from_str(json).map_err(|_| "Invalid APOD response")?;
-    let v = if data.is_array() { data.get(0).ok_or("Empty APOD feed")? } else { &data };
-    let string = |key: &str| v[key].as_str().map(str::to_string).ok_or_else(|| format!("Missing APOD {key}"));
+    let v = if data.is_array() {
+        data.get(0).ok_or("Empty APOD feed")?
+    } else {
+        &data
+    };
+    let string = |key: &str| {
+        v[key]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| format!("Missing APOD {key}"))
+    };
     let media = string("media_type")?;
     if media != "image" && media != "video" {
         return Err("Unsupported APOD media type".into());
@@ -24,7 +33,11 @@ pub fn parse(json: &str) -> Result<Entry, String> {
     if !url.starts_with("https://") {
         return Err("APOD media requires an HTTPS URL".into());
     }
-    let image_url = v["hdurl"].as_str().unwrap_or(&url).to_string();
+    let image_url = v["hdurl"]
+        .as_str()
+        .or_else(|| v["thumbnail_url"].as_str())
+        .unwrap_or(&url)
+        .to_string();
     if !image_url.starts_with("https://") {
         return Err("APOD image requires HTTPS".into());
     }
@@ -32,7 +45,12 @@ pub fn parse(json: &str) -> Result<Entry, String> {
         title: plain_text(&string("title")?),
         date: string("date")?,
         explanation: plain_text(&string("explanation")?),
-        credit: plain_text(v["copyright"].as_str().or_else(|| v["credit"].as_str()).unwrap_or("NASA / APOD")),
+        credit: plain_text(
+            v["copyright"]
+                .as_str()
+                .or_else(|| v["credit"].as_str())
+                .unwrap_or("NASA / APOD"),
+        ),
         url,
         image_url,
         image: media == "image",
@@ -59,27 +77,26 @@ fn plain_text(html: &str) -> String {
 }
 
 pub fn fetch() -> Result<Entry, String> {
-    let key = std::env::var("NASA_API_KEY").ok().filter(|key| !key.trim().is_empty()).unwrap_or_else(|| "DEMO_KEY".into());
-    let primary = ureq::get("https://api.nasa.gov/planetary/apod")
-        .query("api_key", key.trim())
+    // NASA's current APOD service is public and no longer needs an API key.
+    // The date prevents the catalogue endpoint from selecting future posts.
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let mut response = ureq::get("https://science.nasa.gov/wp-json/wp/v2/apod-basic")
+        .query("date", &date)
+        .header(
+            "User-Agent",
+            "Ferrite-Apogee/1.0 (+https://github.com/rwetz/ferrite-apogee)",
+        )
         .config()
-        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .timeout_global(Some(std::time::Duration::from_secs(20)))
         .build()
-        .call();
-    let mut response = match primary {
-        Ok(response) => response,
-        Err(ureq::Error::StatusCode(429)) => return Err("NASA rate limit reached. Set NASA_API_KEY for your own quota.".into()),
-        Err(ureq::Error::StatusCode(401 | 403)) => return Err("NASA rejected the API key.".into()),
-        Err(ureq::Error::StatusCode(code)) if code < 500 => return Err(format!("NASA APOD returned HTTP {code}")),
-        Err(_) => ureq::get("https://science.nasa.gov/wp-json/wp/v2/apod-basic")
-            .query("per_page", "1")
-            .config()
-            .timeout_global(Some(std::time::Duration::from_secs(30)))
-            .build()
-            .call()
-            .map_err(|_| "NASA APOD and its public fallback are unavailable")?,
-    };
-    let json = response.body_mut().with_config().limit(256 * 1024).read_to_string().map_err(|_| "Couldn't read APOD metadata")?;
+        .call()
+        .map_err(|error| format!("NASA APOD request failed: {error}"))?;
+    let json = response
+        .body_mut()
+        .with_config()
+        .limit(256 * 1024)
+        .read_to_string()
+        .map_err(|_| "Couldn't read APOD metadata")?;
     parse(&json)
 }
 
@@ -93,22 +110,39 @@ pub fn picture(entry: &Entry) -> Result<Preview, String> {
     if !entry.image {
         return Err("Today's APOD is a video. Open the source to watch it.".into());
     }
+    if entry.image_url == entry.url && entry.url.contains("science.nasa.gov/image-article/") {
+        return Err("NASA did not provide an image URL. Open the source or try Refresh.".into());
+    }
     let mut response = ureq::get(&entry.image_url)
         .config()
         .timeout_global(Some(std::time::Duration::from_secs(30)))
         .build()
         .call()
         .map_err(|_| "Couldn't download the APOD image")?;
-    let bytes =
-        response.body_mut().with_config().limit(16 * 1024 * 1024).read_to_vec().map_err(|_| "Image exceeds the 16 MB preview limit")?;
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|_| "Unknown image format")?;
+    let bytes = response
+        .body_mut()
+        .with_config()
+        .limit(16 * 1024 * 1024)
+        .read_to_vec()
+        .map_err(|_| "Image exceeds the 16 MB preview limit")?;
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_| "Unknown image format")?;
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(8192);
     limits.max_image_height = Some(8192);
     limits.max_alloc = Some(128 * 1024 * 1024);
     reader.limits(limits);
-    let image = reader.decode().map_err(|_| "Unsupported image or image exceeds preview limits")?.thumbnail(720, 440).to_luma8();
-    Ok(Preview { width: image.width(), height: image.height(), levels: image.into_raw() })
+    let image = reader
+        .decode()
+        .map_err(|_| "Unsupported image or image exceeds preview limits")?
+        .thumbnail(720, 440)
+        .to_luma8();
+    Ok(Preview {
+        width: image.width(),
+        height: image.height(),
+        levels: image.into_raw(),
+    })
 }
 
 #[cfg(test)]

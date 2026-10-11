@@ -15,16 +15,15 @@ cd ferrite-apogee
 cargo run
 ```
 
-Set `NASA_API_KEY` in your own environment for your NASA quota. Without it,
-Apogee uses NASA's limited `DEMO_KEY`. When the classic endpoint is unavailable,
-it falls back to NASA's public `science.nasa.gov` APOD feed. Never put your real key in a config file or source.
+NASA's public APOD feed is key-free. Apogee requests today's metadata directly
+from `science.nasa.gov`, then downloads the actual image URL for its preview.
 
 ## Current slice
 
 - Fetch today's APOD title, date, credit, explanation, and media URL.
 - Download and dither image entries with bounded download/decode limits.
 - Recognize video entries and provide a browser link.
-- Keep the NASA key in the environment, with sanitized error messages.
+- Show bounded loading and useful errors without blocking the window.
 
 The title-bar menu and Ctrl+Shift+P expose actions and scheme/appearance changes.
 `FERRITE_SCHEME`, `FERRITE_APPEARANCE`, and `FERRITE_FPS` supply launch defaults.
@@ -37,7 +36,7 @@ Video entries are opened externally. The preview is deliberately bounded and is 
 
 ## API reference
 
-[Official integration documentation](https://github.com/nasa/apod-api)
+[Current NASA API documentation](https://api.nasa.gov/)
 
 ## Validation
 
@@ -59,3 +58,6 @@ Release commits stay off `main`, so the workflow cannot create a push loop.
 Builds and tests must succeed before publication. Rerunning a workflow reuses
 its tag. Manual `vMAJOR.MINOR.PATCH` tags still work when they match the package
 version. Push feature branches normally; they do not publish releases.
+
+Each Windows executable includes its own pixel icon. `assets/logo.svg` also
+supplies the matching catalogue icon in Lodestone.
