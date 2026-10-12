@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The picture follows the window's height, and the page shows a scrollbar.
+
 - Fetch the current key-free NASA APOD feed and the real image URL.
 - Use dedicated request workers, visible status and a centered preview.
 - Add matching SVG catalogue icons and embedded Windows application icons.

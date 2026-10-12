@@ -1,6 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod apod;
+mod prefs;
+mod prefs_store;
 mod probe;
+mod settings_ui;
 mod worker;
 use ferrite_design::prelude::*;
 use gpui::{
@@ -10,6 +13,7 @@ use gpui::{
 
 struct Apogee {
     palette: Entity<CommandPalette>,
+    settings: Entity<settings_ui::Settings>,
     _appearance: Subscription,
     entry: Option<apod::Entry>,
     picture: Option<(ferrite_design::dither::Picture, u32, u32)>,
@@ -20,6 +24,7 @@ struct Apogee {
 impl Apogee {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let mut app = Self {
+            settings: cx.new(|_| settings_ui::Settings::new()),
             palette: cx.new(|cx| CommandPalette::new(window, cx)),
             _appearance: theme::follow_system(window),
             entry: None,
@@ -35,7 +40,7 @@ impl Apogee {
                 commands.push(
                     command(format!("Scheme: {}", scheme.name))
                         .group("Theme")
-                        .on_run(move |_, cx| theme::set_scheme(scheme, cx)),
+                        .on_run(move |_, cx| prefs::scheme(scheme, cx)),
                 );
             }
             commands.push(
@@ -47,7 +52,7 @@ impl Apogee {
                         } else {
                             Appearance::Light
                         };
-                        theme::set_appearance(appearance, window, cx);
+                        prefs::appearance(appearance, window, cx);
                     }),
             );
             commands.push(
@@ -57,6 +62,7 @@ impl Apogee {
                         let _ = weak.update(cx, |this, cx| this.refresh(cx));
                     }),
             );
+            commands.push(settings_ui::settings_command(app.settings.clone()));
             palette.set_commands(commands, cx);
         });
         app.refresh(cx);
@@ -109,8 +115,11 @@ impl Apogee {
     }
 }
 impl Render for Apogee {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = palette(cx);
+        // The picture fills most of the window's height: bigger on a big
+        // window, never taller than a short one can show.
+        let picture_h = px((f32::from(window.viewport_size().height) - 180.).clamp(200., 900.));
         if !self.busy && self.picture.is_some() {
             probe::record(format!(
                 "APOD image: {}",
@@ -164,7 +173,7 @@ impl Render for Apogee {
                                     .into_any_element()
                             })
                             .w_full()
-                            .h(px(480.))
+                            .h(picture_h)
                         })
                         .into_any_element(),
                 );
@@ -227,19 +236,26 @@ impl Render for Apogee {
                     this.palette
                         .update(cx, |palette, cx| palette.toggle(window, cx))
                 }))
+                .on_action(cx.listener(|this, _: &settings_ui::ToggleSettings, _, cx| {
+                    this.settings.update(cx, |s, cx| s.toggle(cx));
+                }))
+                .child(self.settings.clone())
                 .child(self.palette.clone())
-                .child(title_bar("Apogee").child(menu))
                 .child(
-                    div()
-                        .id("content")
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .gap_3()
-                        .p_4()
-                        .children(content),
+                    title_bar("Apogee")
+                        .child(settings_ui::button(self.settings.clone()))
+                        .child(menu),
+                )
+                .child(
+                    // A visible bar, so a short window reads as "there's more".
+                    scroll_area("content").flex_1().min_h_0().child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .p_4()
+                            .children(content),
+                    ),
                 )
                 .child(
                     status_bar()
@@ -276,9 +292,11 @@ fn main() {
         return;
     }
     gpui_platform::application().run(|cx: &mut App| {
-        ferrite_design::init(Appearance::Dark, cx);
-        theme::apply_env(cx);
-        cx.bind_keys([KeyBinding::new("ctrl-shift-p", TogglePalette, None)]);
+        prefs::init(cx);
+        cx.bind_keys([
+            KeyBinding::new("ctrl-shift-p", TogglePalette, None),
+            KeyBinding::new("ctrl-,", settings_ui::ToggleSettings, None),
+        ]);
         let options =
             chrome::remembered_window_options("apogee", "Apogee", size(px(1100.), px(800.)), cx);
         cx.open_window(options, |window, cx| {
