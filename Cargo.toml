@@ -1,6 +1,6 @@
 [package]
 name = "ferrite-apogee"
-version = "0.1.0"
+version = "0.1.4"
 description = "NASA Astronomy Picture of the Day, rendered through Ferrite dither."
 license = "Apache-2.0"
 authors = ["Ryan Wetzstein"]
