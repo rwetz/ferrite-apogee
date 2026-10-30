@@ -1,6 +1,20 @@
-# Apogee
+<p align="center">
+  <img src="assets/logo.svg" width="128" height="128" alt="Apogee logo">
+</p>
 
-NASA Astronomy Picture of the Day in Ferrite dither.
+<h1 align="center">Apogee</h1>
+
+<p align="center">
+  NASA's Astronomy Picture of the Day in Ferrite dither.
+</p>
+
+<p align="center">
+  <a href="https://github.com/rwetz/ferrite-apogee/actions/workflows/ci.yml"><img src="https://github.com/rwetz/ferrite-apogee/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/rwetz/ferrite-apogee/releases/latest"><img src="https://img.shields.io/github/v/release/rwetz/ferrite-apogee?color=F2A93B&labelColor=18181B" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-3D3D42?labelColor=18181B" alt="License"></a>
+</p>
+
+![Apogee showing NASA's picture of the day as amber dither](docs/main.png)
 
 An early development release. [Windows downloads](https://github.com/rwetz/ferrite-apogee/releases/latest) are also installable through Lodestone.
 
@@ -65,6 +79,13 @@ supplies the matching catalogue icon in Lodestone.
 ## Settings
 
 Open the sliders button in the title bar, press Ctrl+, or choose Settings from the command palette. All ten schemes, Dark/Light/System appearance, motion refresh rate (12 to 240 FPS), and row density apply immediately and persist per app. Save failures appear in Settings. Start with `--settings` to open the drawer directly. Ferrite launcher environment overrides take precedence at startup.
+
+## Keys
+
+| Keys | |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | Command palette |
+| <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
 
 ---
 
